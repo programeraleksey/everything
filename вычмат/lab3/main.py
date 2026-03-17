@@ -23,6 +23,14 @@ def f5(x):
     return math.exp(x)
 
 
+def f6(x):
+    return 1 / x
+
+
+def f7(x):
+    return 1 / math.sqrt(x)
+
+
 def tr_l(a, b, n, func):
     h = (b - a) / n
     summ = 0
@@ -76,7 +84,9 @@ def func_ch():
     3. sin(x)
     4. cos(x)+x
     5. e^x
-    6. Выход
+    6. 1/x
+    7. 1/sqrt(x)
+    8. Выход
     """)
         match func:
             case "1":
@@ -90,6 +100,10 @@ def func_ch():
             case "5":
                 f = f5
             case "6":
+                f = f6
+            case "7":
+                f = f7
+            case "8":
                 exit()
             case _:
                 print(inc_input)
@@ -106,7 +120,9 @@ def int_limit(func):
             continue
         try:
             a, b = (float(x) for x in limits.split())
-        except Exception:
+            if b - a <= 0:
+                raise ValueError
+        except ValueError:
             print(inc_input)
             continue
         break
@@ -133,7 +149,7 @@ def int_count(func, a, b, e):
             break
         try:
             n = int(n)
-            if n <= 0: raise ValueError
+            if n <= 0 or n % 2 != 0: raise ValueError
         except ValueError:
             print(inc_input)
             continue
@@ -142,40 +158,65 @@ def int_count(func, a, b, e):
 
 
 def method_ch(func, a, b, e, n):
-    while True:
-        inp = input("""Выберите метод:
-    1. Метод прямоугольников (левый)
-    2. Метод прямоугольников (правый)
-    3. Метод прямоугольников (средний)
-    4. Метод трапеций
-    5. Метод Симпсона
-    6. Выход
-    """)
-        match inp:
-            case "1":
-                method = tr_l
-                p = 1
-            case "2":
-                method = tr_r
-                p = 1
-            case "3":
-                method = tr_m
-                p = 2
-            case "4":
-                method = trapezoid
-                p = 2
-            case "5":
-                if n % 2 != 0:
-                    n += 1
-                method = simpson
-                p = 4
-            case "6":
-                exit()
-            case _:
-                print(inc_input)
-                continue
-        break
-    method_manager(func, a, b, e, n, method, p)
+    if func == f6 and a <= 0 <= b:
+        print("Интеграл не существует")
+        return
+    elif func == f7 and a <= 0:
+        if a < 0:
+            print(inc_input)
+            return
+        delta = 0.1
+        method = [tr_l, tr_r, tr_m, trapezoid, simpson]
+        p = [1, 1, 2, 2, 4]
+        count = 0
+        for _ in range(70):
+            _, i1 = method_manager(func, delta, b, e, n, method[count], p[count])
+            delta /= 2
+            _, i2 = method_manager(func, delta, b, e, n, method[count], p[count])
+            if abs(i2 - i1) < e:
+                match count:
+                    case 0:
+                        print("1. Решение Методом прямоугольников (левый)")
+                        print(f"Значение вычесленного интеграла равно {i2}")
+                    case 1:
+                        print("2. Решение Методом прямоугольников (правый)")
+                        print(f"Значение вычесленного интеграла равно {i2}")
+                    case 2:
+                        print("3. Решение Методом прямоугольников (средний)")
+                        print(f"Значение вычесленного интеграла равно {i2}")
+                    case 3:
+                        print("4. Решение Методом трапеций")
+                        print(f"Значение вычесленного интеграла равно {i2}")
+                    case 4:
+                        print("5. Решение Методом Симпсона")
+                        print(f"Значение вычесленного интеграла равно {i2}")
+                        return
+                delta = 0.1
+                count += 1
+        print("Не удалось установить сходимость")
+        return
+
+    print("1. Решение Методом прямоугольников (левый)")
+    x, y = method_manager(func, a, b, e, n, tr_l, 1)
+    print(f"Для достижения требуемой точности понадобилось разбиение на n={x} отрезков.")
+    print(f"Значение вычесленного интеграла равно {y}")
+    print("2. Решение Методом прямоугольников (правый)")
+    x, y = method_manager(func, a, b, e, n, tr_r, 1)
+    print(f"Для достижения требуемой точности понадобилось разбиение на n={x} отрезков.")
+    print(f"Значение вычесленного интеграла равно {y}")
+    print("3. Решение Методом прямоугольников (средний)")
+    x, y = method_manager(func, a, b, e, n, tr_m, 2)
+    print(f"Для достижения требуемой точности понадобилось разбиение на n={x} отрезков.")
+    print(f"Значение вычесленного интеграла равно {y}")
+    print("4. Решение Методом трапеций")
+    x, y = method_manager(func, a, b, e, n, trapezoid, 2)
+    print(f"Для достижения требуемой точности понадобилось разбиение на n={x} отрезков.")
+    print(f"Значение вычесленного интеграла равно {y}")
+    print("5. Решение Методом Симпсона")
+    x, y = method_manager(func, a, b, e, n, simpson, 4)
+    print(f"Для достижения требуемой точности понадобилось разбиение на n={x} отрезков.")
+    print(f"Значение вычесленного интеграла равно {y}")
+    return
 
 
 def method_manager(func, a, b, e, n, method, p):
@@ -185,9 +226,7 @@ def method_manager(func, a, b, e, n, method, p):
         i2 = method(a, b, n, func)
         r = abs(i2 - i1) / (2 ** p - 1)
         if r < e:
-            print(f"Для достижения требуемой точности понадобилось разбиение на n={n} отрезков.")
-            print(f"Значение вычесленного интеграла равно {i2}")
-            return
+            return n, i2
         i1 = i2
 
 

@@ -1,5 +1,6 @@
 import numpy as np
 
+
 class Matrix:
     eps = 1e-12
 
@@ -21,7 +22,7 @@ class Matrix:
         triangle_matrix = self.copy_matrix(self.triangle_matrix)
         if abs(self.det) < self.eps: return
         for i in range(self.n - 1, -1, -1):
-            self.answer[i] = triangle_matrix[i][-1]/triangle_matrix[i][i]
+            self.answer[i] = triangle_matrix[i][-1] / triangle_matrix[i][i]
             for j in range(i):
                 triangle_matrix[j][-1] -= triangle_matrix[j][i] * self.answer[i]
                 triangle_matrix[j][i] = 0
@@ -61,8 +62,9 @@ class Matrix:
     def copy_matrix(self, matrix):
         return [row[:] for row in matrix]
 
-
     def compare(self):
+        if abs(self.det) < self.eps:
+            return "Матрица является вырожденной, сравнение результатов невозможно"
         A = np.array([row[:-1] for row in self.matrix], dtype=float)
         b = np.array([row[-1] for row in self.matrix], dtype=float)
         answer_numpy = np.linalg.solve(A, b)

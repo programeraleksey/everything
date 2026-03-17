@@ -1,5 +1,6 @@
 from Matrix import Matrix
 
+
 def matrix_interaction(matrix):
     print("Матрица успешно создана")
     matrix.calculate()
@@ -40,6 +41,8 @@ def matrix_interaction(matrix):
                 break
             case 6:
                 exit()
+            case _:
+                print("Некорректный ввод, повторите попытку")
 
 
 def from_console():
@@ -50,7 +53,7 @@ def from_console():
         except ValueError:
             print("Некорректный ввод, повторите попытку")
             continue
-        if n > 20:
+        if not (1 <= n <= 20):
             print("Размерность должны быть <=20, повторите попытку")
             continue
         break
@@ -63,9 +66,10 @@ def from_console():
         while True:
             row = input().split()
             try:
-                row = [int(i) for i in row]
+                row = [float(i) for i in row]
             except ValueError:
                 print("Некорректный ввод, повторите попытку")
+                continue
             if len(row) == n + 1:
                 matrix.append(row)
                 break
@@ -78,15 +82,19 @@ def from_file():
 Формат файла - размерность в первой строке, далее СЛАУ в виде расширеной матрицы
 Размерность должны быть <=20
 """)
-    with open(path, "r", encoding="utf-8") as f:
-        file = f.read().splitlines()
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            file = f.read().splitlines()
+    except FileNotFoundError:
+        print("Файл не найден, повторите попытку")
+        return
     n = 0
     try:
         n = int(file[0])
     except ValueError:
         print("Некорретные параметры в файле")
         return
-    if n > 20:
+    if not (1 <= n <= 20):
         print("Размерность должны быть <=20, повторите попытку")
         return
     matrix = Matrix(n)
@@ -96,16 +104,18 @@ def from_file():
     for i in file[1:]:
         row = []
         try:
-            row = [int(x) for x in i.split()]
+            row = [float(x) for x in i.split()]
         except ValueError:
             print("Некорретные параметры в файле")
             return
-        if len(row) == n+1:
+        if len(row) == n + 1:
             matrix.append(row)
             continue
         print("Некорретные параметры в файле")
         return
     matrix_interaction(matrix)
+
+
 def main():
     while True:
         method = input("""Выберите способ введения СЛАУ:

@@ -1,0 +1,246 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="WebLab3Ant" default="build" basedir="."
+         xmlns:ivy="antlib:org.apache.ivy.ant"
+         xmlns:jacoco="antlib:org.jacoco.ant">
+
+    <property file="build.properties"/>
+
+    <property name="ivy.install.version" value="2.5.2"/>
+    <property name="ivy.jar.dir" value="${basedir}/.ivy"/>
+    <property name="ivy.jar.file" value="${ivy.jar.dir}/ivy-${ivy.install.version}.jar"/>
+
+    <target name="download-ivy" unless="skip.download">
+        <mkdir dir="${ivy.jar.dir}"/>
+        <get src="https://repo1.maven.org/maven2/org/apache/ivy/ivy/${ivy.install.version}/ivy-${ivy.install.version}.jar"
+             dest="${ivy.jar.file}" usetimestamp="true"/>
+    </target>
+
+    <target name="init-ivy" depends="download-ivy">
+        <path id="ivy.lib.path">
+            <fileset dir="${ivy.jar.dir}" includes="*.jar"/>
+        </path>
+        <taskdef resource="org/apache/ivy/ant/antlib.xml" uri="antlib:org.apache.ivy.ant" classpathref="ivy.lib.path"/>
+    </target>
+
+    <target name="resolve" depends="init-ivy" description="Скачивание зависимостей через Ivy">
+        <echo message="Скачивание зависимостей..."/>
+        <mkdir dir="${lib.dir}"/>
+        <ivy:retrieve pattern="${lib.dir}/[artifact]-[revision].[ext]"/>
+    </target>
+
+    <path id="classpath">
+        <fileset dir="${lib.dir}" includes="**/*.jar"/>
+    </path>
+
+    <!-- CLEAN -->
+    <target name="clean" description="Удаление скомпилированных классов и временных файлов">
+        <echo message="Очистка директорий ${ant.build.dir} и ${dist.dir}..."/>
+        <delete dir="${ant.build.dir}"/>
+        <delete dir="${dist.dir}"/>
+    </target>
+
+
+    <!-- COMPILE -->
+    <target name="compile" depends="resolve" description="Компиляция исходных кодов проекта">
+        <echo message="Компиляция Java кодов из ${src.dir}..."/>
+        <mkdir dir="${classes.dir}"/>
+        <javac srcdir="${src.dir}" destdir="${classes.dir}" includeantruntime="false" encoding="UTF-8" source="17" target="17" debug="true">
+            <classpath refid="classpath"/>
+        </javac>
+    </target>
+
+    <!-- BUILD -->
+    <target name="build" depends="compile" description="Упаковка в исполняемый jar-архив">
+        <echo message="Создание исполняемого JAR архива..."/>
+        <mkdir dir="${dist.dir}"/>
+        <jar destfile="${dist.dir}/${jar.name}" basedir="${classes.dir}">
+            <manifest>
+                <attribute name="Manifest-Version" value="1.0"/>
+                <attribute name="Main-Class" value="${main.class}"/>
+                <attribute name="Implementation-Version" value="${version}"/>
+            </manifest>
+        </jar>
+        <echo message="Сборка завершена: ${dist.dir}/${jar.name}"/>
+    </target>
+
+    <!-- Загрузка и инициализация JaCoCo (без необходимости править ivy.xml) -->
+    <target name="setup-jacoco" description="Скачивание JaCoCo для покрытия кода">
+        <mkdir dir="${ant.build.dir}/jacoco"/>
+        <get src="https://repo1.maven.org/maven2/org/jacoco/jacoco/0.8.11/jacoco-0.8.11.zip"
+             dest="${ant.build.dir}/jacoco.zip" skipexisting="true"/>
+        <unzip src="${ant.build.dir}/jacoco.zip" dest="${ant.build.dir}/jacoco"/>
+        <taskdef uri="antlib:org.jacoco.ant" resource="org/jacoco/ant/antlib.xml">
+            <classpath path="${ant.build.dir}/jacoco/lib/jacocoant.jar"/>
+        </taskdef>
+    </target>
+
+    <!-- TEST -->
+    <target name="test" depends="build, setup-jacoco" description="Запуск тестов">
+        <echo message="Компиляция и запуск тестов..."/>
+        <mkdir dir="${test.classes.dir}"/>
+        <mkdir dir="${report.dir}"/>
+
+        <javac srcdir="${test.dir}" destdir="${test.classes.dir}" includeantruntime="false" encoding="UTF-8" source="17" target="17" debug="true">
+            <classpath>
+                <path refid="classpath"/>
+                <pathelement location="${classes.dir}"/>
+            </classpath>
+        </javac>
+
+        <jacoco:coverage destfile="${report.dir}/jacoco.exec" includes="lab.*">
+            <junit printsummary="yes" haltonfailure="yes" fork="yes">
+                <classpath>
+                    <path refid="classpath"/>
+                    <pathelement location="${classes.dir}"/>
+                    <pathelement location="${test.classes.dir}"/>
+                </classpath>
+                <formatter type="xml"/>
+                <batchtest todir="${report.dir}">
+                    <fileset dir="${test.classes.dir}" includes="**/*Test.class"/>
+                </batchtest>
+            </junit>
+        </jacoco:coverage>
+
+        <jacoco:report>
+            <executiondata>
+                <file file="${report.dir}/jacoco.exec"/>
+            </executiondata>
+            <structure name="${project.name}">
+                <classfiles>
+                    <fileset dir="${classes.dir}">
+                        <include name="**/AreaBean.class"/>
+                        <include name="**/Result.class"/>
+                    </fileset>
+                </classfiles>
+                <sourcefiles encoding="UTF-8"><fileset dir="${src.dir}"/></sourcefiles>
+            </structure>
+            <html destdir="${report.dir}/coverage-report"/>
+            <check failonviolation="true">
+                <rule element="BUNDLE">
+                    <limit counter="INSTRUCTION" value="COVEREDRATIO" minimum="0.80"/>
+                </rule>
+            </check>
+        </jacoco:report>
+
+        <exec executable="git" outputproperty="git.last.author.email">
+            <arg value="log"/>
+            <arg value="-1"/>
+            <arg value="--format=%ae"/>
+        </exec>
+        <echo message="Отправка отчета на: ${git.last.author.email}"/>
+
+        <zip destfile="${report.dir}/coverage-report.zip" basedir="${report.dir}/coverage-report"/>
+
+        <mail mailhost="${mail.smtp.host}" mailport="${mail.smtp.port}" subject="Отчет о тестировании: ${project.name}"
+              user="${mail.smtp.user}" password="${mail.smtp.password}" ssl="${mail.smtp.ssl}" tolist="${git.last.author.email}">
+            <from address="${mail.smtp.user}"/>
+            <attachments>
+                <fileset dir="${report.dir}" includes="coverage-report.zip"/>
+            </attachments>
+        </mail>
+    </target>
+
+    <target name="music" description="Воспроизведение музыки по завершении сборки">
+        <sound>
+            <success source="${music.dir}/${music.success}" loops="0" />
+            <fail source="${music.dir}/${music.fail}" loops="0" />
+        </sound>
+        <echo message="Звуки зарегистрированы! Запускаем процесс сборки..." />
+        <antcall target="build" />
+    </target>
+
+    <!-- SCP -->
+    <target name="scp" depends="build" description="Перемещение проекта по scp">
+        <echo message="Копирование файла на ${scp.host}..."/>
+        <scp file="${dist.dir}/${jar.name}"
+             todir="${scp.user}:${scp.password}@${scp.host}:${scp.dir}"
+             trust="true" port="${scp.port}"/>
+    </target>
+
+    <!-- XML -->
+    <target name="xml" description="Валидация всех xml-файлов в проекте">
+        <echo message="Проверка XML файлов (faces-config.xml, web.xml и т.д.)..."/>
+        <xmlvalidate failonerror="no" warn="yes">
+            <fileset dir="${web.dir}/WEB-INF" includes="**/*.xml"/>
+            <fileset dir="${basedir}" includes="*.xml" excludes="${ant.build.dir}/**"/>
+        </xmlvalidate>
+    </target>
+
+    <!-- TEAM -->
+    <target name="team" depends="build" description="Сборка 4 предыдущих ревизий из SVN">
+        <echo message="Выкачивание и сборка ревизий SVN..."/>
+        <mkdir dir="${team.temp.dir}"/>
+
+        <macrodef name="build-revision">
+            <attribute name="revNum"/>
+            <sequential>
+                <echo message="Получение и сборка ревизии номер @{revNum}..."/>
+                <mkdir dir="${team.temp.dir}/rev@{revNum}"/>
+
+                <exec executable="svn" failonerror="true">
+                    <arg value="checkout"/>
+                    <arg value="-r"/>
+                    <arg value="@{revNum}"/>
+                    <arg value="${svn.repo.url}"/>
+                    <arg value="${team.temp.dir}/rev@{revNum}"/>
+                </exec>
+
+                <ant antfile="${team.temp.dir}/rev@{revNum}/build.xml" target="build" inheritAll="false"/>
+
+                <copy file="${team.temp.dir}/rev@{revNum}/${dist.dir}/${jar.name}"
+                      tofile="${team.temp.dir}/revision-@{revNum}.jar" failonerror="false"/>
+            </sequential>
+        </macrodef>
+
+        <build-revision revNum="1"/>
+        <build-revision revNum="2"/>
+        <build-revision revNum="3"/>
+        <build-revision revNum="4"/>
+
+        <zip destfile="${team.zip.name}" basedir="${team.temp.dir}" includes="*.jar"/>
+        <echo message="Архив с ревизиями успешно создан: ${team.zip.name}"/>
+    </target>
+
+    <!-- DIFF -->
+    <target name="diff" description="Проверка рабочей копии git и commit">
+        <echo message="Проверка измененных файлов в Git..."/>
+        <exec executable="git" outputproperty="git.status.out">
+            <arg value="status"/>
+            <arg value="--short"/>
+        </exec>
+        <echo message="Статус Git: ${git.status.out}"/>
+
+        <condition property="needs.commit">
+            <contains string="${git.status.out}" substring="${diff.classes}"/>
+        </condition>
+
+        <antcall target="do-commit"/>
+    </target>
+
+    <target name="do-commit" if="needs.commit">
+        <echo message="Обнаружены изменения в ${diff.classes}. Выполняем commit..."/>
+        <exec executable="git"><arg line="add ."/></exec>
+        <exec executable="git"><arg line="commit -m '${git.commit.message}'"/></exec>
+    </target>
+
+    <!-- ALT -->
+    <target name="alt" description="Создание альтернативной версии программы">
+        <echo message="Создание альтернативной версии с заменой переменных..."/>
+        <mkdir dir="${alt.src.dir}"/>
+
+        <copy todir="${alt.src.dir}">
+            <fileset dir="${src.dir}"/>
+        </copy>
+
+        <replaceregexp match="${alt.regex.match}" replace="${alt.regex.replace}" flags="g" byline="true">
+            <fileset dir="${alt.src.dir}" includes="**/*.java"/>
+        </replaceregexp>
+
+        <antcall target="build">
+            <param name="src.dir" value="${alt.src.dir}"/>
+            <param name="classes.dir" value="${ant.build.dir}/alt-classes"/>
+            <param name="jar.name" value="${alt.jar.name}"/>
+        </antcall>
+    </target>
+
+</project>
